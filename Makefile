@@ -16,3 +16,6 @@ deploy-excellar:
 		--source SASA7CRB4F6HZEMMJVIHA3PTSCIFSZ7YIU7VHFJX3YSJTELSID46Y3UG \
 		--rpc-url https://rpc-futurenet.stellar.org:443 \
 		--network-passphrase 'Test SDF Future Network ; October 2022'
+
+fmt:
+	cargo fmt --all

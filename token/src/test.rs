@@ -25,9 +25,9 @@ fn test() {
     let user2 = Address::generate(&e);
     let user3 = Address::generate(&e);
     let token = create_token(&e, &admin1);
-    token.whitelist(&user1);
-    token.whitelist(&user2);
-    token.whitelist(&user3);
+    token.pass_kyc(&user1);
+    token.pass_kyc(&user2);
+    token.pass_kyc(&user3);
 
     token.mint(&user1, &1000);
     assert_eq!(
@@ -149,8 +149,8 @@ fn test_burn() {
     let user1 = Address::generate(&e);
     let user2 = Address::generate(&e);
     let token = create_token(&e, &admin);
-    token.whitelist(&user1);
-    token.whitelist(&user2);
+    token.pass_kyc(&user1);
+    token.pass_kyc(&user2);
 
     token.mint(&user1, &1000);
     assert_eq!(token.balance(&user1), 1000);
@@ -208,8 +208,8 @@ fn transfer_insufficient_balance() {
     let user1 = Address::generate(&e);
     let user2 = Address::generate(&e);
     let token = create_token(&e, &admin);
-    token.whitelist(&user1);
-    token.whitelist(&user2);
+    token.pass_kyc(&user1);
+    token.pass_kyc(&user2);
 
     token.mint(&user1, &1000);
     assert_eq!(token.balance(&user1), 1000);
@@ -228,9 +228,9 @@ fn transfer_from_insufficient_allowance() {
     let user2 = Address::generate(&e);
     let user3 = Address::generate(&e);
     let token = create_token(&e, &admin);
-    token.whitelist(&user1);
-    token.whitelist(&user3);
-    token.whitelist(&user2);
+    token.pass_kyc(&user1);
+    token.pass_kyc(&user3);
+    token.pass_kyc(&user2);
 
     token.mint(&user1, &1000);
     assert_eq!(token.balance(&user1), 1000);
@@ -275,15 +275,15 @@ fn test_zero_allowance() {
     let spender = Address::generate(&e);
     let from = Address::generate(&e);
     let token = create_token(&e, &admin);
-    token.whitelist(&spender);
+    token.pass_kyc(&spender);
 
     token.transfer_from(&spender, &from, &spender, &0);
     assert!(token.get_allowance(&from, &spender).is_none());
 }
 
 #[test]
-#[should_panic(expected = "address is not whitelisted")]
-fn test_not_whitelist() {
+#[should_panic(expected = "address is not pass_kyced")]
+fn test_not_pass_kyc() {
     let e = Env::default();
     e.mock_all_auths();
 
@@ -296,7 +296,7 @@ fn test_not_whitelist() {
 }
 
 #[test]
-#[should_panic(expected = "address is not whitelisted")]
+#[should_panic(expected = "address is not pass_kyced")]
 fn test_blacklisted() {
     let e = Env::default();
     e.mock_all_auths();
@@ -306,7 +306,7 @@ fn test_blacklisted() {
     let to = Address::generate(&e);
     let token = create_token(&e, &admin);
 
-    token.whitelist(&to);
+    token.pass_kyc(&to);
     token.blacklist(&to);
 
     token.transfer(&from, &to, &0);
@@ -323,14 +323,14 @@ fn test_zero_transfer() {
     let to = Address::generate(&e);
     let token = create_token(&e, &admin);
 
-    token.whitelist(&to);
+    token.pass_kyc(&to);
     token.transfer(&from, &to, &0);
 
     assert_eq!(token.balance(&to), 0);
 }
 
 #[test]
-fn test_whitelist() {
+fn test_pass_kyc() {
     let e = Env::default();
     e.mock_all_auths();
 
@@ -338,7 +338,7 @@ fn test_whitelist() {
     let user = Address::generate(&e);
     let token = create_token(&e, &admin);
 
-    token.whitelist(&user);
+    token.pass_kyc(&user);
     assert_eq!(
         e.auths(),
         std::vec![(
@@ -346,7 +346,7 @@ fn test_whitelist() {
             AuthorizedInvocation {
                 function: AuthorizedFunction::Contract((
                     token.address.clone(),
-                    symbol_short!("whitelist"),
+                    symbol_short!("pass_kyc"),
                     (&user,).into_val(&e),
                 )),
                 sub_invocations: std::vec![]

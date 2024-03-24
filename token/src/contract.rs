@@ -1,18 +1,24 @@
 //! This contract demonstrates a sample implementation of the Soroban token
 //! interface.
 use crate::admin::{
-    has_administrator, is_whitelisted, read_administrator, write_administrator, write_blacklist,
-    write_whitelist,
+    has_administrator, read_administrator, remove_blacklist, remove_kyc, require_admin,
+    write_administrator, write_blacklist, write_kyc,
 };
 use crate::allowance::{read_allowance, spend_allowance, write_allowance};
-use crate::balance::{read_balance, receive_balance, spend_balance};
-use crate::event::{blacklist, whitelist};
+use crate::balance::{read_balance, receive_balance, spend_balance, total_supply};
+use crate::event::{blacklist_event, fail_kyc_event, pass_kyc_event, whitelist_event};
 use crate::metadata::{read_decimal, read_name, read_symbol, write_metadata};
+use crate::reward::{
+    calculate_reward, checkpoint_reward, read_reward, reset_reward, set_reward_rate,
+    set_reward_tick,
+};
 #[cfg(test)]
 use crate::storage_types::{AllowanceDataKey, AllowanceValue, DataKey};
 use crate::storage_types::{INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
+use crate::validations::{pre_mint_burn_checks, pre_transfer_checks};
+use core::array::from_fn;
 use soroban_sdk::token::{self, Interface as _};
-use soroban_sdk::{contract, contractimpl, Address, Env, String};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String};
 use soroban_token_sdk::metadata::TokenMetadata;
 use soroban_token_sdk::TokenUtils;
 
@@ -37,32 +43,39 @@ impl ExcellarToken {
                 name,
                 symbol,
             },
-        )
-    }
+        );
 
-    fn check_nonnegative_amount(amount: i128) {
-        if amount < 0 {
-            panic!("negative amount is not allowed: {}", amount)
-        }
+        // &5
+        set_reward_rate(&e, 5_00);
+        // roughly the number of ledger advancements
+        set_reward_tick(&e, 28_800);
     }
 
     pub fn mint(e: Env, to: Address, amount: i128) {
-        Self::pre_mint_burn_checks(&e, to.clone(), amount);
-
-        let admin = read_administrator(&e);
-        admin.require_auth();
+        pre_mint_burn_checks(&e, to.clone(), amount);
+        let admin = require_admin(&e);
 
         e.storage()
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
+        checkpoint_reward(&e, to.clone());
         receive_balance(&e, to.clone(), amount);
         TokenUtils::new(&e).events().mint(admin, to, amount);
     }
 
+    pub fn claim_reward(e: Env, to: Address) {
+        to.require_auth();
+        let reward = read_reward(&e, to.clone());
+        if reward < 1 {
+            return;
+        }
+        reset_reward(&e, to.clone());
+        receive_balance(&e, to, reward);
+    }
+
     pub fn set_admin(e: Env, new_admin: Address) {
-        let admin = read_administrator(&e);
-        admin.require_auth();
+        let admin = require_admin(&e);
 
         e.storage()
             .instance()
@@ -72,7 +85,7 @@ impl ExcellarToken {
         TokenUtils::new(&e).events().set_admin(admin, new_admin);
     }
 
-    pub fn whitelist(e: Env, addr: Address) {
+    pub fn fail_kyc(e: Env, addr: Address) {
         let admin = read_administrator(&e);
         admin.require_auth();
 
@@ -80,8 +93,20 @@ impl ExcellarToken {
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
-        write_whitelist(&e, addr.clone());
-        whitelist(&e, addr.clone());
+        remove_kyc(&e, addr.clone());
+        fail_kyc_event(&e, addr.clone());
+    }
+
+    pub fn pass_kyc(e: Env, addr: Address) {
+        let admin = read_administrator(&e);
+        admin.require_auth();
+
+        e.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        write_kyc(&e, addr.clone());
+        pass_kyc_event(&e, addr.clone());
     }
 
     pub fn blacklist(e: Env, addr: Address) {
@@ -93,27 +118,19 @@ impl ExcellarToken {
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
         write_blacklist(&e, addr.clone());
-        blacklist(&e, addr.clone());
+        blacklist_event(&e, addr.clone());
     }
 
-    fn check_whitelisted(e: &Env, addr: Address) {
-        if !is_whitelisted(&e, addr) {
-            panic!("address is not whitelisted");
-        }
-    }
+    pub fn whitelist(e: Env, addr: Address) {
+        let admin = read_administrator(&e);
+        admin.require_auth();
 
-    fn pre_mint_burn_checks(e: &Env, to: Address, amount: i128) {
-        to.require_auth();
+        e.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
-        Self::check_nonnegative_amount(amount);
-        Self::check_whitelisted(e, to);
-    }
-
-    fn pre_transfer_checks(e: &Env, spender: Address, to: Address, amount: i128) {
-        spender.require_auth();
-
-        Self::check_nonnegative_amount(amount);
-        Self::check_whitelisted(e, to);
+        remove_blacklist(&e, addr.clone());
+        whitelist_event(&e, addr.clone());
     }
 
     #[cfg(test)]
@@ -121,6 +138,25 @@ impl ExcellarToken {
         let key = DataKey::Allowance(AllowanceDataKey { from, spender });
         let allowance = e.storage().temporary().get::<_, AllowanceValue>(&key);
         allowance
+    }
+
+    fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
+        require_admin(&e);
+
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
+
+    pub fn total_supply(e: Env) -> i128 {
+        total_supply(&e)
+    }
+
+    pub fn set_reward_rate(e: Env, rate: u32) {
+        require_admin(&e);
+        set_reward_rate(&e, rate);
+    }
+    pub fn set_reward_tick(e: Env, rate: u32) {
+        require_admin(&e);
+        set_reward_tick(&e, rate);
     }
 }
 
@@ -134,7 +170,7 @@ impl token::Interface for ExcellarToken {
     }
 
     fn approve(e: Env, from: Address, spender: Address, amount: i128, expiration_ledger: u32) {
-        Self::pre_transfer_checks(&e, from.clone(), spender.clone(), amount);
+        pre_transfer_checks(&e, from.clone(), spender.clone(), amount);
 
         e.storage()
             .instance()
@@ -154,23 +190,28 @@ impl token::Interface for ExcellarToken {
     }
 
     fn transfer(e: Env, from: Address, to: Address, amount: i128) {
-        Self::pre_transfer_checks(&e, from.clone(), to.clone(), amount);
-
         e.storage()
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
+        pre_transfer_checks(&e, from.clone(), to.clone(), amount);
+
+        checkpoint_reward(&e, from.clone());
+        checkpoint_reward(&e, to.clone());
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
         TokenUtils::new(&e).events().transfer(from, to, amount);
     }
 
     fn transfer_from(e: Env, spender: Address, from: Address, to: Address, amount: i128) {
-        Self::pre_transfer_checks(&e, spender.clone(), to.clone(), amount);
+        pre_transfer_checks(&e, spender.clone(), to.clone(), amount);
 
         e.storage()
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        checkpoint_reward(&e, from.clone());
+        checkpoint_reward(&e, to.clone());
 
         spend_allowance(&e, from.clone(), spender, amount);
         spend_balance(&e, from.clone(), amount);
@@ -179,26 +220,20 @@ impl token::Interface for ExcellarToken {
     }
 
     fn burn(e: Env, from: Address, amount: i128) {
-        Self::pre_mint_burn_checks(&e, from.clone(), amount);
+        pre_mint_burn_checks(&e, from.clone(), amount);
+        from.require_auth();
 
         e.storage()
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
+        checkpoint_reward(&e, from.clone());
         spend_balance(&e, from.clone(), amount);
         TokenUtils::new(&e).events().burn(from, amount);
     }
 
-    fn burn_from(e: Env, spender: Address, from: Address, amount: i128) {
-        Self::pre_mint_burn_checks(&e, from.clone(), amount);
-
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-
-        spend_allowance(&e, from.clone(), spender, amount);
-        spend_balance(&e, from.clone(), amount);
-        TokenUtils::new(&e).events().burn(from, amount)
+    fn burn_from(_env: Env, _spender: Address, _from: Address, _amount: i128) {
+        panic!("not implemented")
     }
 
     fn decimals(e: Env) -> u32 {

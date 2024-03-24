@@ -24,7 +24,12 @@ pub struct AllowanceValue {
 #[contracttype]
 pub enum DataKey {
     Allowance(AllowanceDataKey),
-    Whitelist(Address),
+    RewardCheckpoint(Address),
+    KYC(Address),
+    Blacklisted(Address),
     Balance(Address),
     Admin,
+    TotalSupply,
+    RewardRate,
+    RewardTick,
 }

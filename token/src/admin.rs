@@ -17,17 +17,44 @@ pub fn write_administrator(e: &Env, id: &Address) {
     e.storage().instance().set(&key, id);
 }
 
-pub fn write_whitelist(e: &Env, addr: Address) {
-    let key = DataKey::Whitelist(addr);
+pub fn write_kyc(e: &Env, addr: Address) {
+    let key = DataKey::KYC(addr);
     e.storage().instance().set(&key, &true);
 }
 
-pub fn write_blacklist(e: &Env, addr: Address) {
-    let key = DataKey::Whitelist(addr);
+pub fn remove_kyc(e: &Env, addr: Address) {
+    let key = DataKey::KYC(addr);
     e.storage().instance().remove(&key);
 }
 
-pub fn is_whitelisted(e: &Env, addr: Address) -> bool {
-    let key = DataKey::Whitelist(addr);
-    e.storage().instance().has(&key)
+pub fn remove_blacklist(e: &Env, addr: Address) {
+    let key = DataKey::Blacklisted(addr);
+    e.storage().instance().remove(&key);
+}
+
+pub fn write_blacklist(e: &Env, addr: Address) {
+    let key = DataKey::Blacklisted(addr);
+    e.storage().instance().set(&key, &true);
+}
+
+pub fn check_kyc_passed(e: &Env, addr: Address) {
+    let key = DataKey::KYC(addr);
+    let res = e.storage().instance().has(&key);
+    if !res {
+        panic!("address is not passed kyc");
+    }
+}
+
+pub fn check_not_blacklisted(e: &Env, addr: Address) {
+    let key = DataKey::Blacklisted(addr);
+    let res = e.storage().instance().has(&key);
+    if res {
+        panic!("address is blacklisted");
+    }
+}
+
+pub fn require_admin(e: &Env) -> Address {
+    let admin = read_administrator(&e);
+    admin.require_auth();
+    admin
 }
