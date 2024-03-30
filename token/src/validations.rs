@@ -1,5 +1,6 @@
-use crate::admin::{check_kyc_passed, check_not_blacklisted, require_admin};
 use soroban_sdk::{Address, Env};
+
+use crate::admin::{check_kyc_passed, check_not_blacklisted};
 
 pub fn pre_mint_burn_checks(e: &Env, to: Address, amount: i128) {
     check_non_negative_amount(amount);

@@ -1,7 +1,6 @@
 #![cfg(test)]
 extern crate alloc;
 extern crate std;
-
 use crate::{Deployer, DeployerClient};
 use alloc::vec;
 use soroban_sdk::{

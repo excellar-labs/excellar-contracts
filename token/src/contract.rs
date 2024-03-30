@@ -1,26 +1,25 @@
 //! This contract demonstrates a sample implementation of the Soroban token
 //! interface.
+use soroban_sdk::token::{self, Interface as _};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String};
+use soroban_token_sdk::metadata::TokenMetadata;
+use soroban_token_sdk::TokenUtils;
+
 use crate::admin::{
-    has_administrator, read_administrator, remove_blacklist, remove_kyc, require_admin,
-    write_administrator, write_blacklist, write_kyc,
+    check_kyc_passed, has_administrator, read_administrator, remove_blacklist, remove_kyc,
+    require_admin, write_administrator, write_blacklist, write_kyc,
 };
 use crate::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::balance::{read_balance, receive_balance, spend_balance, total_supply};
 use crate::event::{blacklist_event, fail_kyc_event, pass_kyc_event, whitelist_event};
 use crate::metadata::{read_decimal, read_name, read_symbol, write_metadata};
 use crate::reward::{
-    calculate_reward, checkpoint_reward, read_reward, reset_reward, set_reward_rate,
-    set_reward_tick,
+    checkpoint_reward, read_reward, reset_reward, set_reward_rate, set_reward_tick,
 };
 #[cfg(test)]
 use crate::storage_types::{AllowanceDataKey, AllowanceValue, DataKey};
 use crate::storage_types::{INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
 use crate::validations::{pre_mint_burn_checks, pre_transfer_checks};
-use core::array::from_fn;
-use soroban_sdk::token::{self, Interface as _};
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String};
-use soroban_token_sdk::metadata::TokenMetadata;
-use soroban_token_sdk::TokenUtils;
 
 #[contract]
 pub struct ExcellarToken;
@@ -46,7 +45,7 @@ impl ExcellarToken {
         );
 
         // &5
-        set_reward_rate(&e, 5_00);
+        set_reward_rate(&e, 1_00);
         // roughly the number of ledger advancements
         set_reward_tick(&e, 28_800);
     }
@@ -66,11 +65,25 @@ impl ExcellarToken {
 
     pub fn claim_reward(e: Env, to: Address) {
         to.require_auth();
+        check_kyc_passed(&e, to.clone());
+
         let reward = read_reward(&e, to.clone());
         if reward < 1 {
             return;
         }
         reset_reward(&e, to.clone());
+        checkpoint_reward(&e, to.clone());
+        receive_balance(&e, to, reward);
+    }
+
+    pub fn admin_claim_reward(e: Env, to: Address) {
+        require_admin(&e);
+        let reward = read_reward(&e, to.clone());
+        if reward < 1 {
+            return;
+        }
+        reset_reward(&e, to.clone());
+        checkpoint_reward(&e, to.clone());
         receive_balance(&e, to, reward);
     }
 

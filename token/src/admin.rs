@@ -37,10 +37,14 @@ pub fn write_blacklist(e: &Env, addr: Address) {
     e.storage().instance().set(&key, &true);
 }
 
-pub fn check_kyc_passed(e: &Env, addr: Address) {
+pub fn is_kyc_passed(e: &Env, addr: Address) -> bool {
     let key = DataKey::KYC(addr);
-    let res = e.storage().instance().has(&key);
-    if !res {
+    e.storage().instance().has(&key)
+}
+
+pub fn check_kyc_passed(e: &Env, addr: Address) {
+    let passed = is_kyc_passed(e, addr);
+    if !passed {
         panic!("address is not passed kyc");
     }
 }

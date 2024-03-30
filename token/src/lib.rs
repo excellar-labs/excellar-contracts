@@ -1,5 +1,7 @@
 #![no_std]
 
+pub use crate::contract::ExcellarTokenClient;
+
 mod admin;
 mod allowance;
 mod balance;
@@ -11,5 +13,3 @@ mod storage_types;
 mod test;
 mod test_reward;
 mod validations;
-
-pub use crate::contract::ExcellarTokenClient;

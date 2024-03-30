@@ -1,8 +1,9 @@
+use soroban_sdk::{Address, Env};
+
 use crate::storage_types::{
     DataKey, BALANCE_BUMP_AMOUNT, BALANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT,
     INSTANCE_LIFETIME_THRESHOLD,
 };
-use soroban_sdk::{Address, Env};
 
 pub fn read_balance(e: &Env, addr: Address) -> i128 {
     let key = DataKey::Balance(addr);

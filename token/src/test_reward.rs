@@ -1,11 +1,11 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::ExcellarTokenClient;
 use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
 use soroban_sdk::{Address, Env, IntoVal};
 
 use crate::reward::{_calculate_reward, set_reward_rate, set_reward_tick};
+use crate::ExcellarTokenClient;
 
 fn create_token<'a>(e: &Env, admin: &Address) -> ExcellarTokenClient<'a> {
     let token = ExcellarTokenClient::new(

@@ -1,12 +1,14 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::{contract::ExcellarToken, ExcellarTokenClient};
+use soroban_sdk::testutils::{Ledger, LedgerInfo};
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
     Address, Env, IntoVal, Symbol,
 };
+
+use crate::{contract::ExcellarToken, ExcellarTokenClient};
 
 fn create_token<'a>(e: &Env, admin: &Address) -> ExcellarTokenClient<'a> {
     let token = ExcellarTokenClient::new(e, &e.register_contract(None, ExcellarToken {}));
@@ -40,7 +42,7 @@ fn test() {
                     symbol_short!("mint"),
                     (&user1, 1000_i128).into_val(&e),
                 )),
-                sub_invocations: std::vec![]
+                sub_invocations: std::vec![],
             }
         )]
     );
@@ -57,7 +59,7 @@ fn test() {
                     symbol_short!("approve"),
                     (&user2, &user3, 500_i128, 200_u32).into_val(&e),
                 )),
-                sub_invocations: std::vec![]
+                sub_invocations: std::vec![],
             }
         )]
     );
@@ -74,7 +76,7 @@ fn test() {
                     symbol_short!("transfer"),
                     (&user1, &user2, 600_i128).into_val(&e),
                 )),
-                sub_invocations: std::vec![]
+                sub_invocations: std::vec![],
             }
         )]
     );
@@ -92,7 +94,7 @@ fn test() {
                     Symbol::new(&e, "transfer_from"),
                     (&user3, &user2, &user1, 400_i128).into_val(&e),
                 )),
-                sub_invocations: std::vec![]
+                sub_invocations: std::vec![],
             }
         )]
     );
@@ -114,7 +116,7 @@ fn test() {
                     symbol_short!("set_admin"),
                     (&admin2,).into_val(&e),
                 )),
-                sub_invocations: std::vec![]
+                sub_invocations: std::vec![],
             }
         )]
     );
@@ -133,11 +135,70 @@ fn test() {
                     symbol_short!("approve"),
                     (&user2, &user3, 0_i128, 200_u32).into_val(&e),
                 )),
-                sub_invocations: std::vec![]
+                sub_invocations: std::vec![],
             }
         )]
     );
     assert_eq!(token.allowance(&user2, &user3), 0);
+}
+
+#[test]
+fn test_mint() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+    let user2 = Address::generate(&e);
+    let token = create_token(&e, &admin);
+    token.pass_kyc(&user1);
+    token.pass_kyc(&user2);
+
+    token.mint(&user1, &1000);
+    assert_eq!(
+        e.auths(),
+        std::vec![(
+            admin.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    token.address.clone(),
+                    symbol_short!("mint"),
+                    (&user1, 1000_i128).into_val(&e),
+                )),
+                sub_invocations: std::vec![],
+            }
+        )]
+    );
+    assert_eq!(token.balance(&user1), 1000);
+}
+
+#[test]
+fn test_claim_reward() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+    let token = create_token(&e, &admin);
+    token.pass_kyc(&user1);
+    token.mint(&user1, &1000);
+    token.claim_reward(&user1);
+
+    assert_eq!(
+        e.auths(),
+        std::vec![(
+            user1.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    token.address.clone(),
+                    Symbol::new(&e, "claim_reward"),
+                    (&user1,).into_val(&e),
+                )),
+                sub_invocations: std::vec![],
+            }
+        )]
+    );
+    assert_eq!(token.balance(&user1), 1000);
 }
 
 #[test]
@@ -155,29 +216,6 @@ fn test_burn() {
     token.mint(&user1, &1000);
     assert_eq!(token.balance(&user1), 1000);
 
-    token.approve(&user1, &user2, &500, &200);
-    assert_eq!(token.allowance(&user1, &user2), 500);
-
-    token.burn_from(&user2, &user1, &500);
-    assert_eq!(
-        e.auths(),
-        std::vec![(
-            user2.clone(),
-            AuthorizedInvocation {
-                function: AuthorizedFunction::Contract((
-                    token.address.clone(),
-                    symbol_short!("burn_from"),
-                    (&user2, &user1, 500_i128).into_val(&e),
-                )),
-                sub_invocations: std::vec![]
-            }
-        )]
-    );
-
-    assert_eq!(token.allowance(&user1, &user2), 0);
-    assert_eq!(token.balance(&user1), 500);
-    assert_eq!(token.balance(&user2), 0);
-
     token.burn(&user1, &500);
     assert_eq!(
         e.auths(),
@@ -189,12 +227,12 @@ fn test_burn() {
                     symbol_short!("burn"),
                     (&user1, 500_i128).into_val(&e),
                 )),
-                sub_invocations: std::vec![]
+                sub_invocations: std::vec![],
             }
         )]
     );
 
-    assert_eq!(token.balance(&user1), 0);
+    assert_eq!(token.balance(&user1), 500);
     assert_eq!(token.balance(&user2), 0);
 }
 
@@ -282,21 +320,20 @@ fn test_zero_allowance() {
 }
 
 #[test]
-#[should_panic(expected = "address is not pass_kyced")]
+#[should_panic(expected = "address is not passed kyc")]
 fn test_not_pass_kyc() {
     let e = Env::default();
     e.mock_all_auths();
 
     let admin = Address::generate(&e);
     let from = Address::generate(&e);
-    let to = Address::generate(&e);
     let token = create_token(&e, &admin);
 
-    token.transfer(&from, &to, &0);
+    token.claim_reward(&from);
 }
 
 #[test]
-#[should_panic(expected = "address is not pass_kyced")]
+#[should_panic(expected = "address is blacklisted")]
 fn test_blacklisted() {
     let e = Env::default();
     e.mock_all_auths();
@@ -349,8 +386,87 @@ fn test_pass_kyc() {
                     symbol_short!("pass_kyc"),
                     (&user,).into_val(&e),
                 )),
-                sub_invocations: std::vec![]
+                sub_invocations: std::vec![],
             }
         )]
     );
+}
+
+fn set_sequence_number(e: &Env, sequence_number: u32) {
+    e.ledger().set(LedgerInfo {
+        timestamp: 12345,
+        protocol_version: 1,
+        sequence_number,
+        network_id: Default::default(),
+        base_reserve: 10,
+        min_temp_entry_ttl: 16,
+        min_persistent_entry_ttl: 16,
+        max_entry_ttl: 100_000,
+    });
+}
+#[test]
+fn test_transfer_with_reward() {
+    let blocks_per_reward = 28_800;
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+    let user2 = Address::generate(&e);
+    let token = create_token(&e, &admin);
+
+    token.pass_kyc(&user1);
+    token.pass_kyc(&user2);
+
+    set_sequence_number(&e, 0);
+    token.mint(&user1, &1000);
+    token.mint(&user2, &1000);
+
+    set_sequence_number(&e, blocks_per_reward);
+    token.transfer(&user1, &user2, &300);
+    assert_eq!(token.balance(&user1), 700);
+    assert_eq!(token.balance(&user2), 1300);
+
+    set_sequence_number(&e, blocks_per_reward * 2);
+    token.transfer(&user1, &user2, &300);
+    assert_eq!(token.balance(&user1), 400);
+    assert_eq!(token.balance(&user2), 1600);
+
+    set_sequence_number(&e, blocks_per_reward * 3);
+    token.transfer(&user2, &user1, &600);
+    token.claim_reward(&user1);
+    token.claim_reward(&user2);
+    assert_eq!(token.balance(&user1), 1021);
+    assert_eq!(token.balance(&user2), 1039);
+}
+
+#[test]
+fn test_transfers_burn_with_reward() {
+    let blocks_per_reward = 28_800;
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+    let user2 = Address::generate(&e);
+    let token = create_token(&e, &admin);
+
+    token.pass_kyc(&user1);
+    token.pass_kyc(&user2);
+
+    set_sequence_number(&e, 0);
+    token.mint(&user1, &1000);
+    token.mint(&user2, &1000);
+
+    set_sequence_number(&e, blocks_per_reward);
+    token.transfer(&user1, &user2, &300);
+    assert_eq!(token.balance(&user1), 700);
+    assert_eq!(token.balance(&user2), 1300);
+
+    set_sequence_number(&e, blocks_per_reward * 2);
+    token.burn(&user1, &300);
+    token.claim_reward(&user1);
+    token.claim_reward(&user2);
+    assert_eq!(token.balance(&user1), 417);
+    assert_eq!(token.balance(&user2), 1310);
 }

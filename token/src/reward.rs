@@ -1,9 +1,11 @@
-use crate::balance::{read_balance, receive_balance};
+use crate::admin::is_kyc_passed;
+use soroban_sdk::{contracttype, Address, Env};
+
+use crate::balance::read_balance;
 use crate::storage_types::{
     DataKey, BALANCE_BUMP_AMOUNT, BALANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT,
     INSTANCE_LIFETIME_THRESHOLD,
 };
-use soroban_sdk::{contracttype, Address, Env};
 
 #[contracttype]
 pub struct AccumulatedReward {
@@ -115,7 +117,7 @@ pub fn calculate_reward(e: &Env, addr: Address) -> i128 {
     let key = DataKey::RewardCheckpoint(addr.clone());
     let reward_checkpoint: Option<AccumulatedReward> = e.storage().persistent().get(&key);
     let blocks_held = match reward_checkpoint {
-        Some(checkpoint) => e.ledger().sequence() - checkpoint.created_ledger_number,
+        Some(checkpoint) => e.ledger().sequence() - checkpoint.last_ledger_number,
         None => 0,
     };
     let balance = read_balance(e, addr.clone());
@@ -131,12 +133,26 @@ pub fn _calculate_reward(
     reward_rate: u32,
     reward_tick: u32,
 ) -> i128 {
-    let basis_points = 100_00;
-    let reward_rate = reward_rate as f64 / basis_points as f64;
-    let holding_period = blocks_held as f64 / reward_tick as f64;
-    (balance as f64 * reward_rate * holding_period).round() as i128
+    let basis_points = 100_00i128;
+    let scale_factor = 100_00i128;
+
+    let reward_rate_fp = (reward_rate as i128 * scale_factor) / basis_points;
+    let holding_period_fp = (blocks_held as i128 * scale_factor) / reward_tick as i128;
+    let reward_numerator = balance * reward_rate_fp * holding_period_fp;
+    // Apply a rounding adjustment before the final division to ensure results close to .5 round up
+    // We scale the numerator up further by the scale factor to ensure division is the last operation
+    // This maximizes precision before rounding takes effect
+    let rounded_numerator = reward_numerator + (scale_factor * scale_factor / 2);
+
+    let final_reward = rounded_numerator / (scale_factor * scale_factor);
+    final_reward
 }
+
 pub fn checkpoint_reward(e: &Env, address: Address) {
+    if !is_kyc_passed(&e, address.clone()) {
+        return;
+    }
+
     let reward = calculate_reward(&e, address.clone());
     write_reward(&e, address, reward);
 }
