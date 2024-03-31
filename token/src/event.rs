@@ -19,3 +19,13 @@ pub(crate) fn blacklist_event(e: &Env, user: Address) {
     let topics = (Symbol::new(e, "blacklist"), user);
     e.events().publish(topics, true);
 }
+
+pub(crate) fn add_amm_event(e: &Env, address: Address) {
+    let topics = (Symbol::new(e, "add_amm"), address);
+    e.events().publish(topics, true);
+}
+
+pub(crate) fn remove_amm_event(e: &Env, address: Address) {
+    let topics = (Symbol::new(e, "remove_amm"), address);
+    e.events().publish(topics, true);
+}

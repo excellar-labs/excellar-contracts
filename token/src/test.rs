@@ -10,7 +10,7 @@ use soroban_sdk::{
 
 use crate::{contract::ExcellarToken, ExcellarTokenClient};
 
-fn create_token<'a>(e: &Env, admin: &Address) -> ExcellarTokenClient<'a> {
+pub fn create_token<'a>(e: &Env, admin: &Address) -> ExcellarTokenClient<'a> {
     let token = ExcellarTokenClient::new(e, &e.register_contract(None, ExcellarToken {}));
     token.initialize(admin, &7, &"name".into_val(e), &"symbol".into_val(e));
     token
@@ -392,7 +392,7 @@ fn test_pass_kyc() {
     );
 }
 
-fn set_sequence_number(e: &Env, sequence_number: u32) {
+pub fn set_sequence_number(e: &Env, sequence_number: u32) {
     e.ledger().set(LedgerInfo {
         timestamp: 12345,
         protocol_version: 1,
@@ -406,7 +406,6 @@ fn set_sequence_number(e: &Env, sequence_number: u32) {
 }
 #[test]
 fn test_transfer_with_reward() {
-    let blocks_per_reward = 28_800;
     let e = Env::default();
     e.mock_all_auths();
 
@@ -414,6 +413,11 @@ fn test_transfer_with_reward() {
     let user1 = Address::generate(&e);
     let user2 = Address::generate(&e);
     let token = create_token(&e, &admin);
+    let blocks_per_reward: u32 = 28_800;
+    let reward_rate: u32 = 1_00;
+
+    token.set_reward_tick(&blocks_per_reward);
+    token.set_reward_rate(&reward_rate);
 
     token.pass_kyc(&user1);
     token.pass_kyc(&user2);
@@ -442,7 +446,6 @@ fn test_transfer_with_reward() {
 
 #[test]
 fn test_transfers_burn_with_reward() {
-    let blocks_per_reward = 28_800;
     let e = Env::default();
     e.mock_all_auths();
 
@@ -450,7 +453,11 @@ fn test_transfers_burn_with_reward() {
     let user1 = Address::generate(&e);
     let user2 = Address::generate(&e);
     let token = create_token(&e, &admin);
+    let blocks_per_reward: u32 = 28_800;
+    let reward_rate: u32 = 1_00;
 
+    token.set_reward_tick(&blocks_per_reward);
+    token.set_reward_rate(&reward_rate);
     token.pass_kyc(&user1);
     token.pass_kyc(&user2);
 

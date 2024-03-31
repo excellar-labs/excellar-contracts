@@ -20,13 +20,22 @@ pub struct AllowanceValue {
     pub expiration_ledger: u32,
 }
 
+#[contracttype]
+pub struct AccumulatedReward {
+    pub created_ledger_number: u32,
+    pub last_ledger_number: u32,
+    pub amount: i128,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
     Allowance(AllowanceDataKey),
     RewardCheckpoint(Address),
-    KYC(Address),
+    Kyc(Address),
     Blacklisted(Address),
+    Amm(Address),
+    AmmDepositor(Address),
     Balance(Address),
     Admin,
     TotalSupply,

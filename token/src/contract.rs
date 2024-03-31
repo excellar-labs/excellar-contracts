@@ -6,12 +6,17 @@ use soroban_token_sdk::metadata::TokenMetadata;
 use soroban_token_sdk::TokenUtils;
 
 use crate::admin::{
-    check_kyc_passed, has_administrator, read_administrator, remove_blacklist, remove_kyc,
-    require_admin, write_administrator, write_blacklist, write_kyc,
+    add_amm, check_kyc_passed, check_not_amm, check_not_blacklisted, has_administrator, is_amm,
+    read_administrator, remove_amm, remove_blacklist, remove_kyc, require_admin,
+    write_administrator, write_blacklist, write_kyc,
 };
 use crate::allowance::{read_allowance, spend_allowance, write_allowance};
+use crate::amm::update_amm_depositor_balance;
 use crate::balance::{read_balance, receive_balance, spend_balance, total_supply};
-use crate::event::{blacklist_event, fail_kyc_event, pass_kyc_event, whitelist_event};
+use crate::event::{
+    add_amm_event, blacklist_event, fail_kyc_event, pass_kyc_event, remove_amm_event,
+    whitelist_event,
+};
 use crate::metadata::{read_decimal, read_name, read_symbol, write_metadata};
 use crate::reward::{
     checkpoint_reward, read_reward, reset_reward, set_reward_rate, set_reward_tick,
@@ -19,7 +24,6 @@ use crate::reward::{
 #[cfg(test)]
 use crate::storage_types::{AllowanceDataKey, AllowanceValue, DataKey};
 use crate::storage_types::{INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
-use crate::validations::{pre_mint_burn_checks, pre_transfer_checks};
 
 #[contract]
 pub struct ExcellarToken;
@@ -44,9 +48,9 @@ impl ExcellarToken {
             },
         );
 
-        // &5
+        // should be roughly 0.013% to result in 5% APY. Below is 1%
         set_reward_rate(&e, 1_00);
-        // roughly the number of ledger advancements
+        // roughly the number of ledger advancements in day
         set_reward_tick(&e, 28_800);
     }
 
@@ -66,13 +70,14 @@ impl ExcellarToken {
     pub fn claim_reward(e: Env, to: Address) {
         to.require_auth();
         check_kyc_passed(&e, to.clone());
+        // amm addresses cannot directly claim
+        check_not_amm(&e, to.clone());
 
         let reward = read_reward(&e, to.clone());
         if reward < 1 {
             return;
         }
         reset_reward(&e, to.clone());
-        checkpoint_reward(&e, to.clone());
         receive_balance(&e, to, reward);
     }
 
@@ -149,8 +154,8 @@ impl ExcellarToken {
     #[cfg(test)]
     pub fn get_allowance(e: Env, from: Address, spender: Address) -> Option<AllowanceValue> {
         let key = DataKey::Allowance(AllowanceDataKey { from, spender });
-        let allowance = e.storage().temporary().get::<_, AllowanceValue>(&key);
-        allowance
+
+        e.storage().temporary().get::<_, AllowanceValue>(&key)
     }
 
     fn upgrade(e: Env, new_wasm_hash: BytesN<32>) {
@@ -167,9 +172,34 @@ impl ExcellarToken {
         require_admin(&e);
         set_reward_rate(&e, rate);
     }
+
     pub fn set_reward_tick(e: Env, rate: u32) {
         require_admin(&e);
         set_reward_tick(&e, rate);
+    }
+
+    pub fn add_amm_address(e: Env, addr: Address) {
+        let admin = read_administrator(&e);
+        admin.require_auth();
+
+        e.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        add_amm(&e, addr.clone());
+        add_amm_event(&e, addr.clone());
+    }
+
+    pub fn remove_amm_address(e: Env, addr: Address) {
+        let admin = read_administrator(&e);
+        admin.require_auth();
+
+        e.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        remove_amm(&e, addr.clone());
+        remove_amm_event(&e, addr.clone());
     }
 }
 
@@ -211,6 +241,13 @@ impl token::Interface for ExcellarToken {
 
         checkpoint_reward(&e, from.clone());
         checkpoint_reward(&e, to.clone());
+
+        if is_amm(&e, to.clone()) {
+            update_amm_depositor_balance(&e, to.clone(), from.clone(), amount);
+        } else if is_amm(&e, from.clone()) {
+            update_amm_depositor_balance(&e, from.clone(), to.clone(), -amount);
+        }
+
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
         TokenUtils::new(&e).events().transfer(from, to, amount);
@@ -225,6 +262,12 @@ impl token::Interface for ExcellarToken {
 
         checkpoint_reward(&e, from.clone());
         checkpoint_reward(&e, to.clone());
+
+        if is_amm(&e, to.clone()) {
+            update_amm_depositor_balance(&e, to.clone(), from.clone(), amount);
+        } else if is_amm(&e, from.clone()) {
+            update_amm_depositor_balance(&e, from.clone(), to.clone(), -amount);
+        }
 
         spend_allowance(&e, from.clone(), spender, amount);
         spend_balance(&e, from.clone(), amount);
@@ -259,5 +302,23 @@ impl token::Interface for ExcellarToken {
 
     fn symbol(e: Env) -> String {
         read_symbol(&e)
+    }
+}
+
+pub fn pre_mint_burn_checks(e: &Env, to: Address, amount: i128) {
+    check_non_negative_amount(amount);
+    check_kyc_passed(e, to.clone());
+}
+
+pub fn pre_transfer_checks(e: &Env, spender: Address, to: Address, amount: i128) {
+    spender.require_auth();
+
+    check_non_negative_amount(amount);
+    check_not_blacklisted(e, to);
+}
+
+pub fn check_non_negative_amount(amount: i128) {
+    if amount < 0 {
+        panic!("negative amount is not allowed: {}", amount)
     }
 }

@@ -1,18 +1,13 @@
-use crate::admin::is_kyc_passed;
-use soroban_sdk::{contracttype, Address, Env};
+use crate::admin::{is_amm, is_kyc_passed};
+use crate::amm::{calculate_amm_reward_share, get_amm_depositors};
+use soroban_sdk::{Address, Env};
 
 use crate::balance::read_balance;
+use crate::contract::check_non_negative_amount;
 use crate::storage_types::{
-    DataKey, BALANCE_BUMP_AMOUNT, BALANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT,
-    INSTANCE_LIFETIME_THRESHOLD,
+    AccumulatedReward, DataKey, BALANCE_BUMP_AMOUNT, BALANCE_LIFETIME_THRESHOLD,
+    INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
 };
-
-#[contracttype]
-pub struct AccumulatedReward {
-    created_ledger_number: u32,
-    last_ledger_number: u32,
-    amount: i128,
-}
 
 pub fn read_reward(e: &Env, addr: Address) -> i128 {
     let key = DataKey::RewardCheckpoint(addr);
@@ -31,6 +26,8 @@ pub fn read_reward(e: &Env, addr: Address) -> i128 {
 }
 
 fn write_reward(e: &Env, addr: Address, amount: i128) {
+    check_non_negative_amount(amount);
+
     let key = DataKey::RewardCheckpoint(addr);
     let existing_reward: Option<AccumulatedReward> = e.storage().persistent().get(&key);
     match existing_reward {
@@ -121,8 +118,8 @@ pub fn calculate_reward(e: &Env, addr: Address) -> i128 {
         None => 0,
     };
     let balance = read_balance(e, addr.clone());
-    let reward_rate = get_reward_rate(&e);
-    let reward_tick = get_reward_tick(&e);
+    let reward_rate = get_reward_rate(e);
+    let reward_tick = get_reward_tick(e);
 
     _calculate_reward(blocks_held, balance, reward_rate, reward_tick)
 }
@@ -133,8 +130,8 @@ pub fn _calculate_reward(
     reward_rate: u32,
     reward_tick: u32,
 ) -> i128 {
-    let basis_points = 100_00i128;
-    let scale_factor = 100_00i128;
+    let basis_points = 10_000_i128;
+    let scale_factor = 10_000_i128;
 
     let reward_rate_fp = (reward_rate as i128 * scale_factor) / basis_points;
     let holding_period_fp = (blocks_held as i128 * scale_factor) / reward_tick as i128;
@@ -144,15 +141,90 @@ pub fn _calculate_reward(
     // This maximizes precision before rounding takes effect
     let rounded_numerator = reward_numerator + (scale_factor * scale_factor / 2);
 
-    let final_reward = rounded_numerator / (scale_factor * scale_factor);
-    final_reward
+    rounded_numerator / (scale_factor * scale_factor)
 }
 
 pub fn checkpoint_reward(e: &Env, address: Address) {
-    if !is_kyc_passed(&e, address.clone()) {
+    if !is_kyc_passed(e, address.clone()) && !is_amm(e, address.clone()) {
         return;
     }
 
-    let reward = calculate_reward(&e, address.clone());
-    write_reward(&e, address, reward);
+    let total_reward = calculate_reward(e, address.clone());
+    write_reward(e, address.clone(), total_reward);
+
+    if is_amm(e, address.clone()) {
+        if let Some(depositors) = get_amm_depositors(e, address) {
+            let total_balance: i128 = depositors.iter().map(|d| d.balance).sum();
+            if total_balance > 0 {
+                for depositor in depositors.iter() {
+                    let reward =
+                        calculate_amm_reward_share(total_reward, depositor.balance, total_balance);
+                    write_reward(e, depositor.depositor, reward);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    extern crate std;
+
+    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::{Address, Env};
+
+    use crate::reward::{_calculate_reward, set_reward_rate, set_reward_tick};
+
+    fn setup_test_env() -> (Env, Address) {
+        let env = Env::default();
+        let investor = soroban_sdk::Address::generate(&env);
+        let token_admin = soroban_sdk::Address::generate(&env);
+        env.mock_all_auths();
+        let _token = crate::test::create_token(&env, &token_admin);
+        set_reward_tick(&env, 1);
+        set_reward_rate(&env, 5_00);
+        (env, investor)
+    }
+
+    #[test]
+    fn test_reward_calculation_per_block_tick() {
+        let reward_rate = 5_00;
+        let reward_tick = 1;
+
+        let blocks_held = 10;
+        let balance = 1000;
+
+        let result = _calculate_reward(blocks_held, balance, reward_rate, reward_tick);
+
+        assert_eq!(result, 500, "Rounding error in _calculate_reward function");
+
+        let blocks_held = 1_000_000;
+        let balance = 1_000_000_000;
+
+        let result = _calculate_reward(blocks_held, balance, reward_rate, reward_tick);
+        assert_eq!(
+            result, 50_000_000_000_000,
+            "Rounding error in _calculate_reward function"
+        );
+    }
+
+    #[test]
+    fn test_reward_calculation_per_day_tick() {
+        let reward_rate = 5_00;
+        let reward_tick = 28_800;
+
+        let blocks_held = 287;
+        let balance = 1_000;
+
+        let result = _calculate_reward(blocks_held, balance, reward_rate, reward_tick);
+        assert_eq!(result, 0);
+
+        let blocks_held = 288;
+        let result = _calculate_reward(blocks_held, balance, reward_rate, reward_tick);
+        assert_eq!(result, 1);
+
+        let balance = 10_000;
+        let result = _calculate_reward(blocks_held, balance, reward_rate, reward_tick);
+        assert_eq!(result, 5);
+    }
 }
