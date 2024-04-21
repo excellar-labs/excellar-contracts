@@ -58,10 +58,6 @@ impl ExcellarToken {
         pre_mint_burn_checks(&e, to.clone(), amount);
         let admin = require_admin(&e);
 
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-
         checkpoint_reward(&e, to.clone());
         receive_balance(&e, to.clone(), amount);
         TokenUtils::new(&e).events().mint(admin, to, amount);
@@ -105,10 +101,6 @@ impl ExcellarToken {
     pub fn set_admin(e: Env, new_admin: Address) {
         let admin = require_admin(&e);
 
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-
         write_administrator(&e, &new_admin);
         TokenUtils::new(&e).events().set_admin(admin, new_admin);
     }
@@ -116,10 +108,6 @@ impl ExcellarToken {
     pub fn fail_kyc(e: Env, addr: Address) {
         let admin = read_administrator(&e);
         admin.require_auth();
-
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
         remove_kyc(&e, addr.clone());
         fail_kyc_event(&e, addr.clone());
@@ -129,10 +117,6 @@ impl ExcellarToken {
         let admin = read_administrator(&e);
         admin.require_auth();
 
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-
         write_kyc(&e, addr.clone());
         pass_kyc_event(&e, addr.clone());
     }
@@ -141,10 +125,6 @@ impl ExcellarToken {
         let admin = read_administrator(&e);
         admin.require_auth();
 
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-
         write_blacklist(&e, addr.clone());
         blacklist_event(&e, addr.clone());
     }
@@ -152,10 +132,6 @@ impl ExcellarToken {
     pub fn whitelist(e: Env, addr: Address) {
         let admin = read_administrator(&e);
         admin.require_auth();
-
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
         remove_blacklist(&e, addr.clone());
         whitelist_event(&e, addr.clone());
