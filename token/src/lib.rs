@@ -1,7 +1,4 @@
 #![no_std]
-
-extern crate alloc;
-
 pub use crate::contract::ExcellarTokenClient;
 
 mod admin;

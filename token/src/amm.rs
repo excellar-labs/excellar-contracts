@@ -116,7 +116,7 @@ pub fn update_amm_depositor_balance(
         let mut updated_depositor = depositor.clone();
         updated_depositor.balance = new_balances
             .get(index as u32)
-            .expect("issue accessing user balacn");
+            .expect("issue accessing user balance");
         updated_depositors.push_back(updated_depositor);
     }
     depositors = updated_depositors;
@@ -271,9 +271,9 @@ mod test {
         token.claim_reward(&user2);
         token.claim_reward(&user3);
 
-        assert_eq!(token.balance(&user1), 1008);
-        assert_eq!(token.balance(&user2), 1009);
-        assert_eq!(token.balance(&user3), 1019);
+        assert_eq!(token.balance(&user1), 1018);
+        assert_eq!(token.balance(&user2), 1019);
+        assert_eq!(token.balance(&user3), 1029);
     }
 
     #[test]
@@ -291,5 +291,65 @@ mod test {
         // Test case where reward share is zero due to zero depositor balance
         let reward_share = calculate_amm_reward_share(total_reward, 0, total_balance);
         assert_eq!(reward_share, 0);
+    }
+
+    #[test]
+    fn test_dangling_reward_in_amm() {
+        let e = Env::default();
+        e.mock_all_auths();
+
+        let admin = Address::generate(&e);
+
+        let user1 = Address::generate(&e);
+        let user2 = Address::generate(&e);
+
+        let amm1 = Address::generate(&e);
+        let amm2 = Address::generate(&e);
+
+        let token = crate::test::create_token(&e, &admin);
+
+        let blocks_per_reward: u32 = 28_800;
+        let reward_rate: u32 = 30_00;
+
+        token.pass_kyc(&user1);
+        token.pass_kyc(&user2);
+        set_sequence_number(&e, 0);
+        token.set_reward_tick(&blocks_per_reward);
+        token.set_reward_rate(&reward_rate);
+        token.add_amm_address(&amm1);
+        token.add_amm_address(&amm2);
+
+        token.mint(&user1, &1000);
+        token.transfer(&user1, &amm1, &1000);
+        assert_eq!(token.balance(&user1), 0);
+        assert_eq!(token.balance(&user2), 0);
+        assert_eq!(token.balance(&amm1), 1000);
+
+        set_sequence_number(&e, blocks_per_reward);
+        token.transfer(&amm1, &amm2, &1000);
+        token.transfer(&amm2, &user2, &1000);
+        assert_eq!(token.balance(&user1), 0);
+        assert_eq!(token.balance(&amm1), 0);
+        assert_eq!(token.balance(&amm2), 0);
+        assert_eq!(token.balance(&user2), 1000);
+
+        set_sequence_number(&e, 2 * blocks_per_reward);
+        token.claim_reward(&user1);
+        token.claim_reward(&user2);
+        token.remove_amm_address(&amm1);
+        token.remove_amm_address(&amm2);
+        token.pass_kyc(&amm1);
+        token.pass_kyc(&amm2);
+
+        token.claim_reward(&amm1);
+        token.claim_reward(&amm2);
+        token.claim_reward(&user1);
+        token.claim_reward(&user2);
+        // 300 (reward)
+        assert_eq!(token.balance(&user1), 300);
+        // 1000 (initial) + 300 (reward)
+        assert_eq!(token.balance(&user2), 1300);
+        assert_eq!(token.balance(&amm2), 0);
+        assert_eq!(token.balance(&amm1), 0);
     }
 }

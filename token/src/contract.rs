@@ -73,12 +73,16 @@ impl ExcellarToken {
         // amm addresses cannot directly claim
         check_not_amm(&e, to.clone());
 
+        checkpoint_reward(&e, to.clone());
         let reward = read_reward(&e, to.clone());
         if reward < 1 {
             return;
         }
         reset_reward(&e, to.clone());
-        receive_balance(&e, to, reward);
+        receive_balance(&e, to.clone(), reward);
+        TokenUtils::new(&e)
+            .events()
+            .mint(to.clone(), to.clone(), reward);
     }
 
     pub fn admin_claim_reward(e: Env, to: Address) {
@@ -199,7 +203,11 @@ impl ExcellarToken {
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
         remove_amm(&e, addr.clone());
+        reset_reward(&e, addr.clone());
         remove_amm_event(&e, addr.clone());
+    }
+    pub fn get_reward(e: Env, to: Address) -> i128 {
+        read_reward(&e, to.clone())
     }
 }
 

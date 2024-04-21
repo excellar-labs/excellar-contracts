@@ -475,5 +475,24 @@ fn test_transfers_burn_with_reward() {
     token.claim_reward(&user1);
     token.claim_reward(&user2);
     assert_eq!(token.balance(&user1), 417);
-    assert_eq!(token.balance(&user2), 1310);
+    assert_eq!(token.balance(&user2), 1323);
+}
+
+#[test]
+fn test_mint_and_reward_cf() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+    let token = create_token(&e, &admin);
+    let blocks_per_reward: u32 = 28_800;
+    let reward_rate: u32 = 30_00;
+    token.set_reward_tick(&blocks_per_reward);
+    token.set_reward_rate(&reward_rate);
+    token.pass_kyc(&user1);
+    set_sequence_number(&e, 0);
+    token.mint(&user1, &1000);
+    set_sequence_number(&e, blocks_per_reward * 2);
+    token.claim_reward(&user1);
+    assert_eq!(token.balance(&user1), 1600);
 }
