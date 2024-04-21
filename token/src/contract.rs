@@ -48,8 +48,8 @@ impl ExcellarToken {
             },
         );
 
-        // should be roughly 0.013% to result in 5% APY. Below is 1%
-        set_reward_rate(&e, 1_00);
+        // should be roughly 0.013% to result in 5% APY. Below is 0.01%
+        set_reward_rate(&e, 10_000);
         // roughly the number of ledger advancements in day
         set_reward_tick(&e, 28_800);
     }
@@ -86,14 +86,20 @@ impl ExcellarToken {
     }
 
     pub fn admin_claim_reward(e: Env, to: Address) {
-        require_admin(&e);
+        let admin = require_admin(&e);
+        check_kyc_passed(&e, to.clone());
+        // amm addresses cannot be awarded directly
+        check_not_amm(&e, to.clone());
+
+        checkpoint_reward(&e, to.clone());
         let reward = read_reward(&e, to.clone());
         if reward < 1 {
             return;
         }
         reset_reward(&e, to.clone());
         checkpoint_reward(&e, to.clone());
-        receive_balance(&e, to, reward);
+        receive_balance(&e, to.clone(), reward);
+        TokenUtils::new(&e).events().mint(admin, to, reward);
     }
 
     pub fn set_admin(e: Env, new_admin: Address) {

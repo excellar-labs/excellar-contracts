@@ -414,7 +414,7 @@ fn test_transfer_with_reward() {
     let user2 = Address::generate(&e);
     let token = create_token(&e, &admin);
     let blocks_per_reward: u32 = 28_800;
-    let reward_rate: u32 = 1_00;
+    let reward_rate: u32 = 1_000_000;
 
     token.set_reward_tick(&blocks_per_reward);
     token.set_reward_rate(&reward_rate);
@@ -454,7 +454,7 @@ fn test_transfers_burn_with_reward() {
     let user2 = Address::generate(&e);
     let token = create_token(&e, &admin);
     let blocks_per_reward: u32 = 28_800;
-    let reward_rate: u32 = 1_00;
+    let reward_rate: u32 = 1_000_000;
 
     token.set_reward_tick(&blocks_per_reward);
     token.set_reward_rate(&reward_rate);
@@ -486,13 +486,32 @@ fn test_mint_and_reward_cf() {
     let user1 = Address::generate(&e);
     let token = create_token(&e, &admin);
     let blocks_per_reward: u32 = 28_800;
-    let reward_rate: u32 = 30_00;
+    let reward_rate: u32 = 3_00_00;
+    token.set_reward_tick(&blocks_per_reward);
+    token.set_reward_rate(&reward_rate);
+    token.pass_kyc(&user1);
+    set_sequence_number(&e, 0);
+    token.mint(&user1, &10_000);
+    set_sequence_number(&e, blocks_per_reward * 2);
+    token.claim_reward(&user1);
+    assert_eq!(token.balance(&user1), 10_006);
+}
+
+#[test]
+fn test_mint_and_reward_cf_admin() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let admin = Address::generate(&e);
+    let user1 = Address::generate(&e);
+    let token = create_token(&e, &admin);
+    let blocks_per_reward: u32 = 28_800;
+    let reward_rate: u32 = 30_000_000;
     token.set_reward_tick(&blocks_per_reward);
     token.set_reward_rate(&reward_rate);
     token.pass_kyc(&user1);
     set_sequence_number(&e, 0);
     token.mint(&user1, &1000);
     set_sequence_number(&e, blocks_per_reward * 2);
-    token.claim_reward(&user1);
+    token.admin_claim_reward(&user1);
     assert_eq!(token.balance(&user1), 1600);
 }

@@ -130,10 +130,10 @@ pub fn _calculate_reward(
     reward_rate: u32,
     reward_tick: u32,
 ) -> i128 {
-    let basis_points = 10_000_i128;
-    let scale_factor = 1_000_000_000_i128;
+    let ten_thousand_basis_points = 100_000_000i128;
+    let scale_factor = 1_000_000_000_i128; // Use a high precision scale factor
 
-    let reward_rate_fp = (reward_rate as i128 * scale_factor) / basis_points;
+    let reward_rate_fp = (reward_rate as i128 * scale_factor) / ten_thousand_basis_points;
     let holding_period_fp = (blocks_held as i128 * scale_factor) / reward_tick as i128;
     let reward_numerator = balance * reward_rate_fp * holding_period_fp;
     // Apply a rounding adjustment before the final division to ensure results close to .5 round up
@@ -188,8 +188,8 @@ mod test {
 
     #[test]
     fn test_reward_calculation_per_block_tick() {
-        // means 5bps
-        let reward_rate = 5_00;
+        // means 5%
+        let reward_rate = 5_000_000;
         let reward_tick = 1;
 
         let blocks_held = 10;
@@ -211,12 +211,12 @@ mod test {
 
     #[test]
     fn test_reward_calculation_per_day_tick() {
-        // means 0.05bps
+        // means 0.00005bps
         let reward_rate = 5;
         let reward_tick = 28_800;
 
         let blocks_held = 287;
-        let balance = 100_000;
+        let balance = 1_000_000_000;
 
         let result = _calculate_reward(blocks_held, balance, reward_rate, reward_tick);
         assert_eq!(result, 0);
@@ -225,7 +225,7 @@ mod test {
         let result = _calculate_reward(blocks_held, balance, reward_rate, reward_tick);
         assert_eq!(result, 1);
 
-        let balance = 1_000_000;
+        let balance = 10_000_000_000;
         let result = _calculate_reward(blocks_held, balance, reward_rate, reward_tick);
         assert_eq!(result, 5);
     }

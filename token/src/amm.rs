@@ -124,6 +124,7 @@ pub fn update_amm_depositor_balance(
     // Update the list of depositors in storage
     set_amm_depositors(e, amm_address, depositors);
 }
+
 pub fn calculate_amm_reward_share(
     total_reward: i128,
     depositor_balance: i128,
@@ -201,6 +202,7 @@ mod test {
             )]
         );
     }
+
     #[test]
     #[should_panic(expected = "address is not passed kyc")]
     fn test_mint_not_allowed_for_amm() {
@@ -241,7 +243,8 @@ mod test {
         let user3 = Address::generate(&e);
         let token = crate::test::create_token(&e, &admin);
         let blocks_per_reward: u32 = 28_800;
-        let reward_rate: u32 = 1_00;
+        // 1% per cycle
+        let reward_rate: u32 = 1_000_000;
         token.set_reward_tick(&blocks_per_reward);
         token.set_reward_rate(&reward_rate);
 
@@ -309,7 +312,8 @@ mod test {
         let token = crate::test::create_token(&e, &admin);
 
         let blocks_per_reward: u32 = 28_800;
-        let reward_rate: u32 = 30_00;
+        // 30% per cycle
+        let reward_rate: u32 = 30_000_000;
 
         token.pass_kyc(&user1);
         token.pass_kyc(&user2);
@@ -351,5 +355,91 @@ mod test {
         assert_eq!(token.balance(&user2), 1300);
         assert_eq!(token.balance(&amm2), 0);
         assert_eq!(token.balance(&amm1), 0);
+    }
+
+    #[test]
+    fn test_out_to_user() {
+        let e = Env::default();
+        e.mock_all_auths();
+        let admin = Address::generate(&e);
+        let user1 = Address::generate(&e);
+        let user2 = Address::generate(&e);
+        let amm = Address::generate(&e);
+        let sink = Address::generate(&e);
+
+        let token = crate::test::create_token(&e, &admin);
+
+        let blocks_per_reward: u32 = 28_800;
+        let reward_rate: u32 = 30_000_000;
+        token.set_reward_tick(&blocks_per_reward);
+        token.set_reward_rate(&reward_rate);
+        token.pass_kyc(&user1);
+        token.pass_kyc(&user2);
+        token.pass_kyc(&sink);
+        token.add_amm_address(&amm);
+        set_sequence_number(&e, 0);
+        token.mint(&user1, &800);
+        token.transfer(&user1, &amm, &800);
+        set_sequence_number(&e, blocks_per_reward);
+        token.transfer(&amm, &sink, &400);
+
+        assert_eq!(token.balance(&user1), 0);
+        token.claim_reward(&user1);
+        assert_eq!(token.balance(&user1), 240);
+        token.burn(&user1, &240);
+        assert_eq!(token.balance(&user1), 0);
+        // Fund with with user2
+        token.mint(&user2, &800);
+        token.transfer(&user2, &amm, &800);
+        set_sequence_number(&e, blocks_per_reward * 2);
+        token.transfer(&amm, &sink, &1200);
+        assert_eq!(token.balance(&user1), 0);
+        token.claim_reward(&user1);
+        assert_eq!(token.balance(&user1), 119);
+        token.claim_reward(&user2);
+        assert_eq!(token.balance(&user2), 239);
+    }
+
+    #[test]
+    fn test_out_to_amm() {
+        let e = Env::default();
+        e.mock_all_auths();
+        let admin = Address::generate(&e);
+        let user1 = Address::generate(&e);
+        let user2 = Address::generate(&e);
+        let amm = Address::generate(&e);
+        let sink = Address::generate(&e);
+        let token = crate::test::create_token(&e, &admin);
+        let blocks_per_reward: u32 = 28_800;
+        let reward_rate: u32 = 30_000_000;
+
+        token.set_reward_tick(&blocks_per_reward);
+        token.set_reward_rate(&reward_rate);
+        token.pass_kyc(&user1);
+        token.pass_kyc(&user2);
+        token.add_amm_address(&sink); // only change in setup, sink is amm
+        token.add_amm_address(&amm);
+        set_sequence_number(&e, 0);
+        token.mint(&user1, &800);
+        token.transfer(&user1, &amm, &800);
+        set_sequence_number(&e, blocks_per_reward);
+        token.transfer(&amm, &sink, &400);
+
+        assert_eq!(token.balance(&user1), 0);
+        token.claim_reward(&user1);
+        assert_eq!(token.balance(&user1), 240);
+        token.burn(&user1, &240);
+        assert_eq!(token.balance(&user1), 0);
+        // Fund with with user2
+        token.mint(&user2, &800);
+        token.transfer(&user2, &amm, &800);
+        set_sequence_number(&e, blocks_per_reward * 2);
+        token.transfer(&amm, &sink, &1200);
+        assert_eq!(token.balance(&user1), 0);
+        token.claim_reward(&user1);
+        // notional reduced by 400; total reward 360, when should be 480
+        assert_eq!(token.balance(&user1), 180);
+        token.claim_reward(&user2);
+        assert_eq!(token.balance(&user2), 180);
     }
 }
