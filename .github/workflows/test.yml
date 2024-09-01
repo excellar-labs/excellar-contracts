@@ -25,6 +25,9 @@ jobs:
         with:
           version: nightly
 
+      - name: Change working directory
+        run: cd evm
+
       - name: Show Forge version
         run: |
           forge --version
