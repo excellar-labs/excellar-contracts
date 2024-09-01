@@ -7,6 +7,10 @@ on:
 
 env:
   FOUNDRY_PROFILE: ci
+  
+defaults:
+  run:
+    working-directory: ./evm
 
 jobs:
   check:
@@ -25,13 +29,11 @@ jobs:
         with:
           version: nightly
 
-      - name: Change working directory
-        run: cd evm
-
       - name: Show Forge version
+        id: check version
         run: |
           forge --version
-
+        
       - name: Run Forge fmt
         run: |
           forge fmt --check
