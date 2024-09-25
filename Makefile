@@ -40,7 +40,7 @@ CONTRACT_ADMIN=
 .PHONY: deploy-token
 deploy-token:
 	soroban contract deploy \
-		--wasm target/wasm32-unknown-unknown/release/excellar_token_contract.wasm \
+		--wasm target/wasm32-unknown-unknown/optimized/excellar_token_contract.wasm \
         --source $(CONTRACT_DEPLOYER) \
         --rpc-url $(RPC_URL) \
         --network-passphrase $(NETWORK_PASSPHRASE)
