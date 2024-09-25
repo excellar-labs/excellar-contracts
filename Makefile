@@ -14,10 +14,18 @@ test:
 clippy:
 	cargo clippy --workspace --all-targets --all-features --tests -- -D warnings
 
-
 .PHONY: build-token
 build-token:
-	cd token && cargo build --release --target wasm32-unknown-unknown
+	mkdir -p target/wasm32-unknown-unknown/optimized
+	cargo build -p excellar-deploy
+	cargo rustc --manifest-path=token/Cargo.toml --crate-type=cdylib --target=wasm32-unknown-unknown --release
+	soroban contract optimize \
+		--wasm target/wasm32-unknown-unknown/release/excellar_token_contract.wasm \
+		--wasm-out target/wasm32-unknown-unknown/optimized/excellar_token_contract.wasm
+	# cd target/wasm32-unknown-unknown/optimized/ && \
+	# 	for i in *.wasm ; do \
+	# 		ls -l "$$i"; \
+	# 	done
 
 .PHONY: build-deployer
 build-deployer:
@@ -27,6 +35,7 @@ CONTRACT_DEPLOYER=SCBDHL6YTFK4FUQIWRXPM2HZ6KAA7YECCOK6Y7RTYLTWRNJ2XDHHBH5R
 ADMIN_ACCOUNT=GDWYLT6ACXVSPY65UWJ2WRHL45M6HHPMNJWPNDRRCHU2A76TFV5OQBNX
 NETWORK_PASSPHRASE='Test SDF Future Network ; October 2022'
 RPC_URL='https://rpc-futurenet.stellar.org:443/'
+CONTRACT_ADMIN=
 
 .PHONY: deploy-token
 deploy-token:
