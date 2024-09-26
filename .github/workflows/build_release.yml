@@ -12,6 +12,6 @@ jobs:
       release_name: ${{ github.ref_name }}
       release_description: 'XUSD Release'
       package: 'token'
-      make_target: 'build'
+      make_target: 'build-token'
     secrets:
       release_token: ${{ secrets.GH_API_TOKEN }}
