@@ -1,6 +1,6 @@
 [package]
-name = "excellar-token-contract"
-description = "excellar token contract"
+name = "token"
+description = "Excellar Token Contract"
 version = "0.1.0"
 edition = "2021"
 

@@ -20,12 +20,12 @@ build-token:
 	cargo build -p excellar-deploy
 	cargo rustc --manifest-path=token/Cargo.toml --crate-type=cdylib --target=wasm32-unknown-unknown --release
 	soroban contract optimize \
-		--wasm target/wasm32-unknown-unknown/release/excellar_token_contract.wasm \
-		--wasm-out target/wasm32-unknown-unknown/optimized/excellar_token_contract.wasm
-	# cd target/wasm32-unknown-unknown/optimized/ && \
-	# 	for i in *.wasm ; do \
-	# 		ls -l "$$i"; \
-	# 	done
+		--wasm target/wasm32-unknown-unknown/release/token.wasm \
+		--wasm-out target/wasm32-unknown-unknown/optimized/token.wasm
+	cd target/wasm32-unknown-unknown/optimized/ && \
+		for i in *.wasm ; do \
+			ls -l "$$i"; \
+		done
 
 .PHONY: build-deployer
 build-deployer:
