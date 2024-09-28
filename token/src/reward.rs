@@ -1,12 +1,14 @@
-use crate::admin::{is_amm, is_kyc_passed};
+use crate::admin::{is_amm, is_kyc_passed, read_token_address};
 use crate::amm::{calculate_amm_reward_share, get_amm_depositors};
-use soroban_sdk::{Address, Env};
-
-use crate::balance::read_balance;
 use crate::contract::check_non_negative_amount;
 use crate::storage_types::{
-    AccumulatedReward, DataKey, BALANCE_BUMP_AMOUNT, BALANCE_LIFETIME_THRESHOLD,
-    INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
+    AccumulatedReward, DataKey, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
+    LEDGER_BUMP_USER, LEDGER_THRESHOLD_USER,
+};
+use soroban_sdk::{
+    token::{Client as TokenClient}, token::StellarAssetInterface,
+    Address,
+    Env,
 };
 
 pub fn read_reward(e: &Env, addr: Address) -> i128 {
@@ -18,7 +20,7 @@ pub fn read_reward(e: &Env, addr: Address) -> i128 {
     {
         e.storage()
             .persistent()
-            .extend_ttl(&key, BALANCE_LIFETIME_THRESHOLD, BALANCE_BUMP_AMOUNT);
+            .extend_ttl(&key, LEDGER_THRESHOLD_USER, LEDGER_BUMP_USER);
         reward.amount
     } else {
         0
@@ -40,8 +42,8 @@ fn write_reward(e: &Env, addr: Address, amount: i128) {
             e.storage().persistent().set(&key, &acc_reward);
             e.storage().persistent().extend_ttl(
                 &key,
-                BALANCE_LIFETIME_THRESHOLD,
-                BALANCE_BUMP_AMOUNT,
+                LEDGER_THRESHOLD_USER,
+                LEDGER_BUMP_USER,
             );
         }
         None => {
@@ -55,7 +57,7 @@ fn write_reward(e: &Env, addr: Address, amount: i128) {
     }
     e.storage()
         .persistent()
-        .extend_ttl(&key, BALANCE_LIFETIME_THRESHOLD, BALANCE_BUMP_AMOUNT);
+        .extend_ttl(&key, LEDGER_THRESHOLD_USER, LEDGER_BUMP_USER);
 }
 
 pub fn reset_reward(e: &Env, addr: Address) {
@@ -117,7 +119,8 @@ pub fn calculate_reward(e: &Env, addr: Address) -> i128 {
         Some(checkpoint) => e.ledger().sequence() - checkpoint.last_ledger_number,
         None => 0,
     };
-    let balance = read_balance(e, addr.clone());
+    let xusd_token = TokenClient::new(&e, &read_token_address(&e));
+    let balance = xusd_token.balance(&addr);
     let reward_rate = get_reward_rate(e);
     let reward_tick = get_reward_tick(e);
 
