@@ -2,5 +2,9 @@
 **/Cargo.lock
 /.idea
 .venv
+.env
+**/.env
+node_modules
+**/node_modules
 *.py
 **/test_snapshots
