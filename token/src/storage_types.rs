@@ -1,18 +1,12 @@
 use soroban_sdk::{contracttype, Address};
 
-pub(crate) const DAY_IN_LEDGERS: u32 = 17280;
-pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 7 * DAY_IN_LEDGERS;
-pub(crate) const INSTANCE_LIFETIME_THRESHOLD: u32 = INSTANCE_BUMP_AMOUNT - DAY_IN_LEDGERS;
-
-pub(crate) const BALANCE_BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
-pub(crate) const BALANCE_LIFETIME_THRESHOLD: u32 = BALANCE_BUMP_AMOUNT - DAY_IN_LEDGERS;
-
-#[derive(Clone)]
-#[contracttype]
-pub struct AllowanceDataKey {
-    pub from: Address,
-    pub spender: Address,
-}
+pub const ONE_DAY_LEDGERS: u32 = 17280; // assumes 5s a ledger
+pub const INSTANCE_LIFETIME_THRESHOLD: u32 = ONE_DAY_LEDGERS * 30; // ~ 30 days
+pub const INSTANCE_BUMP_AMOUNT: u32 = INSTANCE_LIFETIME_THRESHOLD + ONE_DAY_LEDGERS; // ~ 31 days
+pub const LEDGER_THRESHOLD_SHARED: u32 = ONE_DAY_LEDGERS * 45; // ~ 45 days
+pub const LEDGER_BUMP_SHARED: u32 = LEDGER_THRESHOLD_SHARED + ONE_DAY_LEDGERS; // ~ 46 days
+pub const LEDGER_THRESHOLD_USER: u32 = ONE_DAY_LEDGERS * 100; // ~ 100 days
+pub const LEDGER_BUMP_USER: u32 = LEDGER_THRESHOLD_USER + 20 * ONE_DAY_LEDGERS; // ~ 120 days
 
 #[contracttype]
 pub struct AllowanceValue {
@@ -30,14 +24,13 @@ pub struct AccumulatedReward {
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    Allowance(AllowanceDataKey),
     RewardCheckpoint(Address),
     Kyc(Address),
     Blacklisted(Address),
     Amm(Address),
     AmmDepositor(Address),
-    Balance(Address),
-    Admin,
+    ContractAdmin,
+    TokenAddress,
     TotalSupply,
     RewardRate,
     RewardTick,
