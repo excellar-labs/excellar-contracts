@@ -1,6 +1,5 @@
 use soroban_sdk::{contracttype, Address};
 
-
 pub const ONE_DAY_LEDGERS: u32 = 17280; // assumes 5s a ledger
 pub const INSTANCE_LIFETIME_THRESHOLD: u32 = ONE_DAY_LEDGERS * 30; // ~ 30 days
 pub const INSTANCE_BUMP_AMOUNT: u32 = INSTANCE_LIFETIME_THRESHOLD + ONE_DAY_LEDGERS; // ~ 31 days
@@ -8,7 +7,6 @@ pub const LEDGER_THRESHOLD_SHARED: u32 = ONE_DAY_LEDGERS * 45; // ~ 45 days
 pub const LEDGER_BUMP_SHARED: u32 = LEDGER_THRESHOLD_SHARED + ONE_DAY_LEDGERS; // ~ 46 days
 pub const LEDGER_THRESHOLD_USER: u32 = ONE_DAY_LEDGERS * 100; // ~ 100 days
 pub const LEDGER_BUMP_USER: u32 = LEDGER_THRESHOLD_USER + 20 * ONE_DAY_LEDGERS; // ~ 120 days
-
 
 #[contracttype]
 pub struct AllowanceValue {
@@ -31,7 +29,7 @@ pub enum DataKey {
     Blacklisted(Address),
     Amm(Address),
     AmmDepositor(Address),
-    Admin,
+    ContractAdmin,
     TokenAddress,
     TotalSupply,
     RewardRate,

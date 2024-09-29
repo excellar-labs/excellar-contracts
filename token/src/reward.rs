@@ -1,15 +1,16 @@
 use crate::admin::{is_amm, is_kyc_passed, read_token_address};
 use crate::amm::{calculate_amm_reward_share, get_amm_depositors};
-use crate::contract::check_non_negative_amount;
 use crate::storage_types::{
     AccumulatedReward, DataKey, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
     LEDGER_BUMP_USER, LEDGER_THRESHOLD_USER,
 };
-use soroban_sdk::{
-    token::{Client as TokenClient}, token::StellarAssetInterface,
-    Address,
-    Env,
-};
+use soroban_sdk::{token::Client as TokenClient, token::StellarAssetInterface, Address, Env};
+
+pub fn check_non_negative_amount(amount: i128) {
+    if amount < 0 {
+        panic!("negative amount is not allowed: {}", amount)
+    }
+}
 
 pub fn read_reward(e: &Env, addr: Address) -> i128 {
     let key = DataKey::RewardCheckpoint(addr);
@@ -40,11 +41,9 @@ fn write_reward(e: &Env, addr: Address, amount: i128) {
                 amount: amount + reward.amount,
             };
             e.storage().persistent().set(&key, &acc_reward);
-            e.storage().persistent().extend_ttl(
-                &key,
-                LEDGER_THRESHOLD_USER,
-                LEDGER_BUMP_USER,
-            );
+            e.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD_USER, LEDGER_BUMP_USER);
         }
         None => {
             let acc_reward = AccumulatedReward {
@@ -67,7 +66,6 @@ pub fn reset_reward(e: &Env, addr: Address) {
 
 pub fn set_reward_rate(e: &Env, rate: u32) {
     let key = DataKey::RewardRate;
-    let rate = rate.max(0);
     e.storage().persistent().set(&key, &rate);
     e.storage()
         .persistent()
@@ -89,7 +87,6 @@ pub fn get_reward_rate(e: &Env) -> u32 {
 }
 
 pub fn set_reward_tick(e: &Env, tick: u32) {
-    let tick = tick.max(0);
     let key = DataKey::RewardTick;
     e.storage().persistent().set(&key, &tick);
     e.storage()
@@ -119,7 +116,7 @@ pub fn calculate_reward(e: &Env, addr: Address) -> i128 {
         Some(checkpoint) => e.ledger().sequence() - checkpoint.last_ledger_number,
         None => 0,
     };
-    let xusd_token = TokenClient::new(&e, &read_token_address(&e));
+    let xusd_token = TokenClient::new(e, &read_token_address(e));
     let balance = xusd_token.balance(&addr);
     let reward_rate = get_reward_rate(e);
     let reward_tick = get_reward_tick(e);
