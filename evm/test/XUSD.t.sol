@@ -166,6 +166,36 @@ contract XUSDTest is Test {
         assertEq(xusd.balanceOf(user2), user2BalanceBefore + 500, "User2 balance should be updated after transfer");
     }
 
+    function testUpgradePreservesBalances() public {
+        address user1 = address(0x123);
+        address user2 = address(0x456);
+        
+        vm.startPrank(admin);
+        xusd.mint(user1, 1000);
+        xusd.mint(user2, 2000);
+        vm.stopPrank();
+
+        uint256 user1BalanceBefore = xusd.balanceOf(user1);
+        uint256 user2BalanceBefore = xusd.balanceOf(user2);
+        uint256 totalSupplyBefore = xusd.totalSupply();
+
+        XUSD newImplementation = new XUSD();
+        vm.startPrank(admin);
+        xusd.upgradeToAndCall(address(newImplementation), "");
+        vm.stopPrank();
+
+        assertEq(xusd.balanceOf(user1), user1BalanceBefore, "User1 balance should be preserved after upgrade");
+        assertEq(xusd.balanceOf(user2), user2BalanceBefore, "User2 balance should be preserved after upgrade");
+        assertEq(xusd.totalSupply(), totalSupplyBefore, "Total supply should be preserved after upgrade");
+
+        vm.startPrank(user1);
+        xusd.transfer(user2, 500);
+        vm.stopPrank();
+
+        assertEq(xusd.balanceOf(user1), user1BalanceBefore - 500, "User1 balance should be updated after transfer");
+        assertEq(xusd.balanceOf(user2), user2BalanceBefore + 500, "User2 balance should be updated after transfer");
+    }
+
     function testCannotInitializeTwice() public {
         vm.startPrank(admin);
         vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
