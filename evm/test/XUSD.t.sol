@@ -12,6 +12,8 @@ contract XUSDTest is Test {
     ERC1967Proxy public proxy;
     address public admin = address(1);
     address public user = address(2);
+    address public minter = address(3);
+    address public newOwner = address(4);
 
     function setUp() public {
         implementation = new XUSD();
@@ -21,21 +23,46 @@ contract XUSDTest is Test {
         xusd = XUSD(address(proxy));
     }
 
-    function testInitialState() public view {
+    function testInitialState() view public {
         assertEq(xusd.name(), "XUSD Token");
         assertEq(xusd.symbol(), "XUSD");
         assertEq(xusd.decimals(), 6);
         assertEq(xusd.owner(), admin);
+        assertTrue(xusd.hasRole(xusd.MINTER_ROLE(), admin), "Admin should be a minter by default");
     }
 
-    function testMintOnlyOwner() public {
+    function testMinterRole() public {
+        // Admin can mint by default
         vm.startPrank(admin);
-        xusd.mint(user, 1000);
-        assertEq(xusd.balanceOf(user), 1000);
+        xusd.mint(user, 500);
+        assertEq(xusd.balanceOf(user), 500);
         vm.stopPrank();
 
-        vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", user));
+        // Initially minter cannot mint
+        vm.startPrank(minter);
+        vm.expectRevert();
+        xusd.mint(user, 1000);
+        vm.stopPrank();
+
+        // Admin adds minter
+        vm.startPrank(admin);
+        xusd.addMinter(minter);
+        vm.stopPrank();
+
+        // Now minter can mint
+        vm.startPrank(minter);
+        xusd.mint(user, 1000);
+        assertEq(xusd.balanceOf(user), 1500);
+        vm.stopPrank();
+
+        // Admin removes minter
+        vm.startPrank(admin);
+        xusd.removeMinter(minter);
+        vm.stopPrank();
+
+        // Minter can no longer mint
+        vm.startPrank(minter);
+        vm.expectRevert();
         xusd.mint(user, 1000);
         vm.stopPrank();
     }
@@ -80,23 +107,33 @@ contract XUSDTest is Test {
         assertEq(xusd.allowance(owner, spender), value);
     }
 
-    function testUpgradeability() public {
+    function testOwnerChangeAndUpgrade() public {
+        // Transfer ownership to new owner
+        vm.startPrank(admin);
+        xusd.transferOwnership(newOwner);
+        vm.stopPrank();
+
+        assertEq(xusd.owner(), newOwner);
+
+        // Deploy new implementation
         XUSD newImplementation = new XUSD();
 
-        vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", user));
-        xusd.upgradeToAndCall(address(newImplementation), "");
-        vm.stopPrank();
-
+        // Old owner can't upgrade
         vm.startPrank(admin);
+        vm.expectRevert();
         xusd.upgradeToAndCall(address(newImplementation), "");
         vm.stopPrank();
 
-        assertEq(xusd.owner(), admin);
+        // New owner can upgrade
+        vm.startPrank(newOwner);
+        xusd.upgradeToAndCall(address(newImplementation), "");
+        vm.stopPrank();
+
+        // Verify state after upgrade
+        assertEq(xusd.owner(), newOwner);
         assertEq(xusd.name(), "XUSD Token");
         assertEq(xusd.symbol(), "XUSD");
         assertEq(xusd.decimals(), 6);
-        assertEq(xusd.owner(), admin);
     }
 
     function testUpgradePreservesBalances() public {
@@ -166,7 +203,7 @@ contract XUSDTest is Test {
     }
 
     function testBurnFrom() public {
-        address spender = address(3);
+        address spender = address(5);
 
         vm.startPrank(admin);
         xusd.mint(user, 1000);
@@ -184,7 +221,7 @@ contract XUSDTest is Test {
     }
 
     function testCannotBurnFromWithoutAllowance() public {
-        address spender = address(3);
+        address spender = address(5);
 
         vm.startPrank(admin);
         xusd.mint(user, 1000);
@@ -197,7 +234,7 @@ contract XUSDTest is Test {
     }
 
     function testCannotBurnFromMoreThanAllowance() public {
-        address spender = address(3);
+        address spender = address(5);
 
         vm.startPrank(admin);
         xusd.mint(user, 1000);

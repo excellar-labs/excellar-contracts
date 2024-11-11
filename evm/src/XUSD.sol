@@ -7,6 +7,7 @@ import {OwnableUpgradeable} from "openzeppelin-contracts-upgradeable/access/Owna
 import {ERC20PermitUpgradeable} from "openzeppelin-contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
 import {ERC20BurnableUpgradeable} from "openzeppelin-contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {AccessControlUpgradeable} from "openzeppelin-contracts-upgradeable/access/AccessControlUpgradeable.sol";
 
 contract XUSD is
     Initializable,
@@ -14,8 +15,11 @@ contract XUSD is
     OwnableUpgradeable,
     ERC20PermitUpgradeable,
     ERC20BurnableUpgradeable,
-    UUPSUpgradeable
+    UUPSUpgradeable,
+    AccessControlUpgradeable
 {
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -27,14 +31,26 @@ contract XUSD is
         __ERC20Permit_init("XUSD Token");
         __ERC20Burnable_init();
         __UUPSUpgradeable_init();
+        __AccessControl_init();
+
+        _grantRole(DEFAULT_ADMIN_ROLE, initialOwner);
+        _grantRole(MINTER_ROLE, initialOwner);
     }
 
     function decimals() public pure override returns (uint8) {
         return 6;
     }
 
-    function mint(address to, uint256 amount) public onlyOwner {
+    function mint(address to, uint256 amount) public onlyRole(MINTER_ROLE) {
         _mint(to, amount);
+    }
+
+    function addMinter(address minter) public onlyOwner {
+        grantRole(MINTER_ROLE, minter);
+    }
+
+    function removeMinter(address minter) public onlyOwner {
+        revokeRole(MINTER_ROLE, minter);
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
