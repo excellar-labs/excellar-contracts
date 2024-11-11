@@ -12,10 +12,10 @@ contract XUSDScript is Script {
         // Get deployment private key from environment
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployerAddress = vm.addr(deployerPrivateKey);
-        
+
         // Get network-specific parameters
         address initialOwner = vm.envAddress("INITIAL_OWNER");
-        
+
         console.log("Deploying XUSD with parameters:");
         console.log("Deployer:", deployerAddress);
         console.log("Initial Owner:", initialOwner);
@@ -27,16 +27,10 @@ contract XUSDScript is Script {
         console.log("Implementation deployed at:", address(implementation));
 
         // Encode initialization data
-        bytes memory initData = abi.encodeWithSelector(
-            XUSD.initialize.selector,
-            initialOwner
-        );
+        bytes memory initData = abi.encodeWithSelector(XUSD.initialize.selector, initialOwner);
 
         // Deploy proxy
-        ERC1967Proxy proxy = new ERC1967Proxy(
-            address(implementation),
-            initData
-        );
+        ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
         console.log("Proxy deployed at:", address(proxy));
 
         vm.stopBroadcast();

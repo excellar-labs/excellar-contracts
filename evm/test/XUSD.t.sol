@@ -23,7 +23,7 @@ contract XUSDTest is Test {
         xusd = XUSD(address(proxy));
     }
 
-    function testInitialState() view public {
+    function testInitialState() public view {
         assertEq(xusd.name(), "XUSD Token");
         assertEq(xusd.symbol(), "XUSD");
         assertEq(xusd.decimals(), 6);
