@@ -58,24 +58,30 @@ impl ExcellarToken {
         write_contract_admin(&e, &new_admin);
     }
 
-    // pub fn claim_reward(e: Env, to: Address) {
-    //     to.require_auth();
-    //     // check_kyc_passed(&e, to.clone());
-    //     check_authorized(&e, to.clone());
-    //     // amm addresses cannot directly claim
-    //     check_not_amm(&e, to.clone());
-    //
-    //     checkpoint_reward(&e, to.clone());
-    //     let reward = read_reward(&e, to.clone());
-    //     if reward < 1 {
-    //         return;
-    //     }
-    //     reset_reward(&e, to.clone());
-    //     checkpoint_reward(&e, to.clone());
-    //
-    //     let xusd_token = TokenAdminClient::new(&e, &read_token_address(&e));
-    //     xusd_token.mint(&to, &reward)
-    // }
+    pub fn claim_reward(e: Env, to: Address) {
+        let token = TokenAdminClient::new(&e, &read_token_address(&e));
+        token.set_authorized(&to, &true);
+
+        to.require_auth();
+        check_authorized(&e, to.clone());
+        // check_kyc_passed(&e, to.clone());
+        // amm addresses cannot directly claim
+        check_not_amm(&e, to.clone());
+
+        checkpoint_reward(&e, to.clone());
+        let reward = read_reward(&e, to.clone());
+        if reward < 1 {
+            token.set_authorized(&to, &false);
+            return;
+        }
+        reset_reward(&e, to.clone());
+        checkpoint_reward(&e, to.clone());
+
+        let xusd_token = TokenAdminClient::new(&e, &read_token_address(&e));
+        xusd_token.mint(&to, &reward);
+
+        token.set_authorized(&to, &false);
+    }
 
     pub fn admin_claim_reward(e: Env, to: Address) {
         let _ = require_contract_admin(&e);
@@ -173,11 +179,11 @@ impl TokenInterface for ExcellarToken {
     fn allowance(env: Env, from: Address, spender: Address) -> i128 {
         let token = TokenAdminClient::new(&env, &read_token_address(&env));
         token.set_authorized(&from, &true);
-
+        
         from.require_auth();
         let xusd_token = TokenClient::new(&env, &read_token_address(&env));
         let result = xusd_token.allowance(&from, &spender);
-
+        
         token.set_authorized(&from, &false);
         result
     }
@@ -185,11 +191,11 @@ impl TokenInterface for ExcellarToken {
     fn approve(env: Env, from: Address, spender: Address, amount: i128, expiration_ledger: u32) {
         let token = TokenAdminClient::new(&env, &read_token_address(&env));
         token.set_authorized(&from, &true);
-
+        
         from.require_auth();
         let xusd_token = TokenClient::new(&env, &read_token_address(&env));
         xusd_token.approve(&from, &spender, &amount, &expiration_ledger);
-
+        
         token.set_authorized(&from, &false);
     }
 
@@ -202,10 +208,15 @@ impl TokenInterface for ExcellarToken {
         let token = TokenAdminClient::new(&env, &read_token_address(&env));
         token.set_authorized(&from, &true);
         token.set_authorized(&to, &true);
-
+        
+        from.require_auth();
+        
+        checkpoint_reward(&env, from.clone());
+        checkpoint_reward(&env, to.clone());
+        
         let xusd_token = TokenClient::new(&env, &read_token_address(&env));
         xusd_token.transfer(&from, &to, &amount);
-
+        
         token.set_authorized(&from, &false);
         token.set_authorized(&to, &false);
     }
@@ -215,11 +226,15 @@ impl TokenInterface for ExcellarToken {
         token.set_authorized(&spender, &true);
         token.set_authorized(&from, &true);
         token.set_authorized(&to, &true);
-
+        
         spender.require_auth();
+        
+        checkpoint_reward(&env, from.clone());
+        checkpoint_reward(&env, to.clone());
+        
         let xusd_token = TokenClient::new(&env, &read_token_address(&env));
         xusd_token.transfer_from(&spender, &from, &to, &amount);
-
+        
         token.set_authorized(&spender, &false);
         token.set_authorized(&from, &false);
         token.set_authorized(&to, &false);
@@ -228,11 +243,14 @@ impl TokenInterface for ExcellarToken {
     fn burn(env: Env, from: Address, amount: i128) {
         let token = TokenAdminClient::new(&env, &read_token_address(&env));
         token.set_authorized(&from, &true);
-
+        
         from.require_auth();
+        
+        checkpoint_reward(&env, from.clone());
+        
         let xusd_token = TokenClient::new(&env, &read_token_address(&env));
         xusd_token.burn(&from, &amount);
-
+        
         token.set_authorized(&from, &false);
     }
 
@@ -240,11 +258,14 @@ impl TokenInterface for ExcellarToken {
         let token = TokenAdminClient::new(&env, &read_token_address(&env));
         token.set_authorized(&spender, &true);
         token.set_authorized(&from, &true);
-
+        
         spender.require_auth();
+        
+        checkpoint_reward(&env, from.clone());
+        
         let xusd_token = TokenClient::new(&env, &read_token_address(&env));
         xusd_token.burn_from(&spender, &from, &amount);
-
+        
         token.set_authorized(&spender, &false);
         token.set_authorized(&from, &false);
     }
@@ -308,6 +329,7 @@ impl StellarAssetInterface for ExcellarToken {
         let _ = require_contract_admin(&env);
         let token = TokenAdminClient::new(&env, &read_token_address(&env));
 
+        checkpoint_reward(&env, from.clone());
         token.clawback(&from, &amount);
     }
 }
