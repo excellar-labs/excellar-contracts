@@ -62,3 +62,9 @@ soroban contract invoke \
     --id CACLTFEE37H73JK7MMOCRSS2MOGR7DX7OUDRKAPDFHDXQHEGQZDHKH7U \
     -- withdraw_admin --to GDOJ6OUGJYOQL2SQ52A2R33KOYHJMJ2DCLZZEYUXUKJBB3CSIO5ZKKQ5 --usdc-amount 20
 ```
+
+##### Checking a trust line
+```bash
+  echo '{"type": "trustline", "account_id": "GDC3HLVFTCK57SDEYQGUYGAKOE5YJHHTVQVZ5KQ5OJZG6C46TODAFGWY", "asset": "XUSD:GBUB6OYV54IR5Y4UWVGYADFFTXLT6VW7U3ZPVEM7SRU3CRP75KIDWVSU"}' | stellar xdr encode --type LedgerKey --input json --output single-base64
+  
+```
