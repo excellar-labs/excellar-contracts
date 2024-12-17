@@ -170,117 +170,144 @@ impl ExcellarToken {
 
 #[contractimpl]
 impl TokenInterface for ExcellarToken {
-    fn allowance(e: Env, from: Address, spender: Address) -> i128 {
+    fn allowance(env: Env, from: Address, spender: Address) -> i128 {
+        let token = TokenAdminClient::new(&env, &read_token_address(&env));
+        token.set_authorized(&from, &true);
+
         from.require_auth();
-        let xusd_token = TokenClient::new(&e, &read_token_address(&e));
-        xusd_token.allowance(&from, &spender)
+        let xusd_token = TokenClient::new(&env, &read_token_address(&env));
+        let result = xusd_token.allowance(&from, &spender);
+
+        token.set_authorized(&from, &false);
+        result
     }
 
-    fn approve(e: Env, from: Address, spender: Address, amount: i128, expiration_ledger: u32) {
+    fn approve(env: Env, from: Address, spender: Address, amount: i128, expiration_ledger: u32) {
+        let token = TokenAdminClient::new(&env, &read_token_address(&env));
+        token.set_authorized(&from, &true);
+
         from.require_auth();
-        let xusd_token = TokenClient::new(&e, &read_token_address(&e));
-        xusd_token.approve(&from, &spender, &amount, &expiration_ledger)
+        let xusd_token = TokenClient::new(&env, &read_token_address(&env));
+        xusd_token.approve(&from, &spender, &amount, &expiration_ledger);
+
+        token.set_authorized(&from, &false);
     }
 
-    fn balance(e: Env, id: Address) -> i128 {
-        let xusd_token = TokenClient::new(&e, &read_token_address(&e));
+    fn balance(env: Env, id: Address) -> i128 {
+        let xusd_token = TokenClient::new(&env, &read_token_address(&env));
         xusd_token.balance(&id)
     }
 
-    fn transfer(e: Env, from: Address, to: Address, amount: i128) {
-        from.require_auth();
-        let xusd_token = TokenClient::new(&e, &read_token_address(&e));
-        xusd_token.transfer(&from, &to, &amount)
+    fn transfer(env: Env, from: Address, to: Address, amount: i128) {
+        let token = TokenAdminClient::new(&env, &read_token_address(&env));
+        token.set_authorized(&from, &true);
+        token.set_authorized(&to, &true);
+
+        let xusd_token = TokenClient::new(&env, &read_token_address(&env));
+        xusd_token.transfer(&from, &to, &amount);
+
+        token.set_authorized(&from, &false);
+        token.set_authorized(&to, &false);
     }
 
-    fn transfer_from(e: Env, spender: Address, from: Address, to: Address, amount: i128) {
+    fn transfer_from(env: Env, spender: Address, from: Address, to: Address, amount: i128) {
+        let token = TokenAdminClient::new(&env, &read_token_address(&env));
+        token.set_authorized(&spender, &true);
+        token.set_authorized(&from, &true);
+        token.set_authorized(&to, &true);
+
         spender.require_auth();
-        let xusd_token = TokenClient::new(&e, &read_token_address(&e));
-        xusd_token.transfer_from(&spender, &from, &to, &amount)
+        let xusd_token = TokenClient::new(&env, &read_token_address(&env));
+        xusd_token.transfer_from(&spender, &from, &to, &amount);
+
+        token.set_authorized(&spender, &false);
+        token.set_authorized(&from, &false);
+        token.set_authorized(&to, &false);
     }
 
-    fn burn(e: Env, from: Address, amount: i128) {
+    fn burn(env: Env, from: Address, amount: i128) {
+        let token = TokenAdminClient::new(&env, &read_token_address(&env));
+        token.set_authorized(&from, &true);
+
         from.require_auth();
-        let xusd_token = TokenClient::new(&e, &read_token_address(&e));
-        xusd_token.burn(&from, &amount)
+        let xusd_token = TokenClient::new(&env, &read_token_address(&env));
+        xusd_token.burn(&from, &amount);
+
+        token.set_authorized(&from, &false);
     }
 
-    fn burn_from(e: Env, spender: Address, from: Address, amount: i128) {
+    fn burn_from(env: Env, spender: Address, from: Address, amount: i128) {
+        let token = TokenAdminClient::new(&env, &read_token_address(&env));
+        token.set_authorized(&spender, &true);
+        token.set_authorized(&from, &true);
+
         spender.require_auth();
-        let xusd_token = TokenClient::new(&e, &read_token_address(&e));
-        xusd_token.burn_from(&spender, &from, &amount)
+        let xusd_token = TokenClient::new(&env, &read_token_address(&env));
+        xusd_token.burn_from(&spender, &from, &amount);
+
+        token.set_authorized(&spender, &false);
+        token.set_authorized(&from, &false);
     }
 
-    fn decimals(e: Env) -> u32 {
-        let xusd_token = TokenClient::new(&e, &read_token_address(&e));
+    fn decimals(env: Env) -> u32 {
+        let xusd_token = TokenClient::new(&env, &read_token_address(&env));
         xusd_token.decimals()
     }
 
-    fn name(e: Env) -> String {
-        let xusd_token = TokenClient::new(&e, &read_token_address(&e));
+    fn name(env: Env) -> String {
+        let xusd_token = TokenClient::new(&env, &read_token_address(&env));
         xusd_token.name()
     }
 
-    fn symbol(e: Env) -> String {
-        let xusd_token = TokenClient::new(&e, &read_token_address(&e));
+    fn symbol(env: Env) -> String {
+        let xusd_token = TokenClient::new(&env, &read_token_address(&env));
         xusd_token.symbol()
     }
 }
 
 #[contractimpl]
 impl StellarAssetInterface for ExcellarToken {
-    fn set_admin(e: Env, new_admin: Address) {
-        let _ = require_contract_admin(&e);
+    fn set_admin(env: Env, new_admin: Address) {
+        let _ = require_contract_admin(&env);
 
-        let token = TokenAdminClient::new(&e, &read_token_address(&e));
+        let token = TokenAdminClient::new(&env, &read_token_address(&env));
         token.set_admin(&new_admin);
     }
 
-    fn admin(e: Env) -> Address {
-        let token = TokenAdminClient::new(&e, &read_token_address(&e));
+    fn admin(env: Env) -> Address {
+        let token = TokenAdminClient::new(&env, &read_token_address(&env));
         token.admin()
     }
 
-    fn set_authorized(e: Env, id: Address, authorize: bool) {
-        // TODO: INSECURE! DO NOT COMMENT
-        let _ = require_contract_admin(&e);
+    fn set_authorized(env: Env, id: Address, authorize: bool) {
+        let _ = require_contract_admin(&env);
 
-        let token = TokenAdminClient::new(&e, &read_token_address(&e));
+        let token = TokenAdminClient::new(&env, &read_token_address(&env));
         token.set_authorized(&id, &authorize);
     }
 
-    fn authorized(e: Env, id: Address) -> bool {
-        // check_kyc_passed(&e, id.clone());
-        let token = TokenAdminClient::new(&e, &read_token_address(&e));
+    fn authorized(env: Env, id: Address) -> bool {
+        // check_kyc_passed(&env, id.clone());
+        let token = TokenAdminClient::new(&env, &read_token_address(&env));
         token.authorized(&id)
     }
 
-    fn mint(e: Env, to: Address, amount: i128) {
-        // TODO: INSECURE! DO NOT COMMENT
-        let _ = require_contract_admin(&e);
+    fn mint(env: Env, to: Address, amount: i128) {
+        let _ = require_contract_admin(&env);
 
-        checkpoint_reward(&e, to.clone());
-        let token = TokenAdminClient::new(&e, &read_token_address(&e));
+        let token = TokenAdminClient::new(&env, &read_token_address(&env));
+        token.set_authorized(&to, &true);
+
+        checkpoint_reward(&env, to.clone());
         token.mint(&to, &amount);
+
+        token.set_authorized(&to, &false);
     }
 
-    fn clawback(e: Env, from: Address, amount: i128) {
-        // TODO: INSECURE! DO NOT COMMENT
-        let _ = require_contract_admin(&e);
-        let token = TokenAdminClient::new(&e, &read_token_address(&e));
+    fn clawback(env: Env, from: Address, amount: i128) {
+        let _ = require_contract_admin(&env);
+        let token = TokenAdminClient::new(&env, &read_token_address(&env));
 
         token.clawback(&from, &amount);
     }
 }
-
-// pub fn pre_mint_burn_checks(e: &Env, to: Address, amount: i128) {
-//     check_non_negative_amount(amount);
-//     check_authorized(e, to.clone());
-// }
-
-// pub fn pre_transfer_checks(e: &Env, spender: Address, to: Address, amount: i128) {
-//     spender.require_auth();
-
-//     check_non_negative_amount(amount);
-//     check_not_blacklisted(e, to);
-// }
